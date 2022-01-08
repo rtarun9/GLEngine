@@ -2,13 +2,11 @@
 
 out vec4 out_frag_color;
 
-uniform float u_time;
-
 in vec2 tex_coord;
 
-uniform sampler2D tex;
+uniform sampler2D texture_diffuse1;
 
 void main()
 {
-	out_frag_color = texture(tex, tex_coord);
+	out_frag_color = texture(texture_diffuse1, tex_coord);
 }

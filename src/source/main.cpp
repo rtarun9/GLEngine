@@ -10,6 +10,7 @@
 
 #include "../include/shader.hpp"
 #include "../include/camera.hpp"
+#include "../include/model.hpp"
 
 static constexpr int SCREEN_WIDTH = 1920;
 static constexpr int SCREEN_HEIGHT = 1080;
@@ -191,6 +192,7 @@ int main()
 	stbi_image_free(data);
 
 	Shader shader("../shaders/test_vertex.glsl", "../shaders/test_fragment.glsl");
+	Model sponza("../assets/models/sponza/sponza.obj");
 
 	glEnable(GL_DEPTH_TEST);
 
@@ -205,21 +207,22 @@ int main()
 		process_input(window);
 		
 		glm::mat4 model_mat = glm::mat4(1.0f);
+		model_mat = glm::scale(model_mat, glm::vec3(0.1f));
+
 		//model_mat = glm::rotate(model_mat, glm::radians(static_cast<float>(sinf(glfwGetTime() / 100.0f))), glm::vec3(1.0f, 0.0f, 1.0f));
 
 		glm::mat4 view_mat = g_camera.get_view_mat();
-		glm::mat4 projection_mat = glm::perspective(glm::radians(g_camera.get_zoom()), (float)SCREEN_WIDTH / SCREEN_HEIGHT, 0.1f, 100.0f);
+		glm::mat4 projection_mat = glm::perspective(glm::radians(g_camera.get_zoom()), (float)SCREEN_WIDTH / SCREEN_HEIGHT, 0.1f, 1000.0f);
 
 		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		shader.use();
-		shader.set_float("u_time", glfwGetTime());
 		shader.set_mat4("model_mat", model_mat);
 		shader.set_mat4("view_mat", view_mat);
 		shader.set_mat4("projection_mat", projection_mat);
 
-		glDrawArrays(GL_TRIANGLES, 0, 36);
+		sponza.draw(shader);
 
 		glfwSwapBuffers(window);
 	}
