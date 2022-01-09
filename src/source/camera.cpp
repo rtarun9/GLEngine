@@ -9,7 +9,7 @@ Camera::Camera()
 	: m_yaw(defaults::YAW), m_pitch(defaults::PITCH), m_mouse_sensitivity(defaults::SENSITIVITY),
 	  m_movement_speed(defaults::SPEED), m_zoom(defaults::ZOOM)
 {
-	m_position = glm::vec3(glm::vec3(0.0f, 0.0f, 3.0f));
+	m_position = glm::vec3(glm::vec3(0.0f, 0.0f, 6.0f));
 	m_world_up = glm::vec3(0.0f, 1.0f, 0.0f);
 	m_right = glm::vec3(1.0f, 0.0f, 0.0f);
 	m_up = m_world_up;

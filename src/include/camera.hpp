@@ -15,7 +15,7 @@ namespace defaults
 {
 	constexpr float YAW = -90.0f;
 	constexpr float PITCH = 0.0f;
-	constexpr float SPEED = 30.5f;
+	constexpr float SPEED = 10.5f;
 	constexpr float SENSITIVITY = 0.4f;
 	constexpr float ZOOM = 45.0f;
 }
@@ -35,7 +35,7 @@ public:
 
 	void update_vectors();
 
-private:
+public:
 	glm::vec3 m_position;
 	glm::vec3 m_front;
 	glm::vec3 m_up;

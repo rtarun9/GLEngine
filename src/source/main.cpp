@@ -85,6 +85,7 @@ void process_scroll(GLFWwindow* window, double xoffset, double yoffset)
 
 int main()
 {
+	// Initialize and configure GLFW
 	glfwInit();
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
@@ -111,113 +112,57 @@ int main()
 	glfwSetCursorPosCallback(window, process_mouse);
 	glfwSetScrollCallback(window, process_scroll);
 
-	// Prepare for rendering
-	float vertices[] =
-	{
-		  -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-		 0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
-		 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-		 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-		-0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-		-0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-
-		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-		 0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-		 0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-		 0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-		-0.5f,  0.5f,  0.5f,  0.0f, 1.0f,
-		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-
-		-0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-		-0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-		-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-		-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-		-0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-
-		 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-		 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-		 0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-		 0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-		 0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-		 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-
-		-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-		 0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
-		 0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-		 0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-		-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-
-		-0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-		 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-		 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-		 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-		-0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
-		-0.5f,  0.5f, -0.5f,  0.0f, 1.0f
-	};
-
-	uint32_t vao;
-	glGenVertexArrays(1, &vao);
-	glBindVertexArray(vao);
-
-	uint32_t vbo;
-	glGenBuffers(1, &vbo);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, nullptr);
-	glEnableVertexAttribArray(0);
-
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)(sizeof(float) * 3));
-	glEnableVertexAttribArray(1);
-
-	// Load texture
-	int width = 0;
-	int height = 0;
-	int num_channels = 0;
-	unsigned char* data = stbi_load("../assets/images/container.jpg", &width, &height, &num_channels, 0);
-	if (!data)
-	{
-		std::cout << "Failed to load texture";
-	}
-
-	uint32_t texture = 0;
-	glGenTextures(1, &texture);
-
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-	glGenerateMipmap(GL_TEXTURE_2D);
-
-	stbi_image_free(data);
-
 	Shader shader("../shaders/test_vertex.glsl", "../shaders/test_fragment.glsl");
+	Shader light_shader("../shaders/light_vertex.glsl", "../shaders/light_fragment.glsl");
+
 	Model sponza("../assets/models/sponza/sponza.obj");
+	Model cube("../assets/models/cube/cube.obj");
 
-	glEnable(GL_DEPTH_TEST);
 
+
+	glm::vec3 light_position = glm::vec3(0.0f, 4.0f, 0.0f);
+	glm::vec3 light_color = glm::vec3(1.0f);
 
 	while (!glfwWindowShouldClose(window))
 	{
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LESS);
+		glEnable(GL_BLEND);
+		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+		glEnable(GL_CULL_FACE);
+
 		g_current_frame_time = g_clock.now();
 		g_delta_time = (g_current_frame_time - g_previous_frame_time).count() * 1e-9;
 		g_previous_frame_time = g_current_frame_time;
 
 		glfwPollEvents();
 		process_input(window);
-		
 		glm::mat4 model_mat = glm::mat4(1.0f);
-		model_mat = glm::scale(model_mat, glm::vec3(0.1f));
 
 		//model_mat = glm::rotate(model_mat, glm::radians(static_cast<float>(sinf(glfwGetTime() / 100.0f))), glm::vec3(1.0f, 0.0f, 1.0f));
 
 		glm::mat4 view_mat = g_camera.get_view_mat();
-		glm::mat4 projection_mat = glm::perspective(glm::radians(g_camera.get_zoom()), (float)SCREEN_WIDTH / SCREEN_HEIGHT, 0.1f, 1000.0f);
-
-		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+		glm::mat4 projection_mat = glm::perspective(glm::radians(g_camera.get_zoom()), (float)SCREEN_WIDTH / SCREEN_HEIGHT, 0.1f, 100.0f);
+		model_mat = glm::translate(model_mat, light_position);
+		model_mat = glm::scale(model_mat, glm::vec3(0.1f));
+		glClearColor(0.4f, 0.5f, 0.6f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+		light_shader.use();
+		light_shader.set_mat4("model_mat", model_mat);
+		light_shader.set_mat4("view_mat", view_mat);
+		light_shader.set_mat4("projection_mat", projection_mat);
+
+		light_shader.set_vec3f("light_color", light_color);
+		cube.draw(light_shader);
+
+		model_mat = glm::mat4(1.0f);
+		model_mat = glm::scale(model_mat, glm::vec3(0.01f));
 		shader.use();
+		shader.set_vec3f("light_position", light_position);
+		shader.set_vec3f("camera_position", g_camera.m_position);
+		shader.set_vec3f("light_color", light_color);
+
 		shader.set_mat4("model_mat", model_mat);
 		shader.set_mat4("view_mat", view_mat);
 		shader.set_mat4("projection_mat", projection_mat);

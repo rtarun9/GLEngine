@@ -2,6 +2,7 @@
 
 project ("GLEngine")
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /fp:fast")
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin")
 set(CMAKE_CXX_STANDARD 17)
 
@@ -15,6 +16,7 @@ find_path(STB_INCLUDE_DIRS "stb.h")
 
 file(GLOB_RECURSE SRC_FILES
     ${PROJECT_SOURCE_DIR}/src/source/*.cpp
+
 )
 
 add_executable (GLEngine ${SRC_FILES})
