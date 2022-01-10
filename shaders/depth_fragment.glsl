@@ -2,12 +2,9 @@
 
 out vec4 out_frag_color;
 
-in vec2 tex_coord;
-
-uniform sampler2D texture_diffuse1;
 
 #define near 0.1f
-#define far 100.0f
+#define far 1000.0f
 
 void main()
 {

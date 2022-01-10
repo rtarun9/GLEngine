@@ -11,6 +11,7 @@ find_package(glad CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
 
 find_path(STB_INCLUDE_DIRS "stb.h")
 
@@ -21,4 +22,4 @@ file(GLOB_RECURSE SRC_FILES
 
 add_executable (GLEngine ${SRC_FILES})
 
-target_link_libraries(GLEngine PRIVATE glfw glad::glad glm::glm ${STB_INCLUDE_DIRS} assimp::assimp nlohmann_json nlohmann_json::nlohmann_json )
+target_link_libraries(GLEngine PRIVATE glfw glad::glad glm::glm ${STB_INCLUDE_DIRS} assimp::assimp nlohmann_json nlohmann_json::nlohmann_json imgui::imgui)
