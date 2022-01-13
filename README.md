@@ -1,3 +1,3 @@
 # GLEngine
 
-Graphics renderer for quicly testing out various graphics techniques.
+Graphics renderer for quickly testing out various graphics techniques.
