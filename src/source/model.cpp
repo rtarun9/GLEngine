@@ -64,7 +64,7 @@ void Model::draw(Shader& shader)
 void Model::load_model(const std::string& path)
 {
     Assimp::Importer importer;
-    const aiScene *scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_OptimizeMeshes);
+    const aiScene *scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_OptimizeMeshes | aiProcess_CalcTangentSpace);
 
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
     {
@@ -116,6 +116,14 @@ Mesh Model::process_mesh(aiMesh *mesh, const aiScene *scene)
         {
             vertex.tex_coords.x = mesh->mTextureCoords[0][i].x;
             vertex.tex_coords.y = mesh->mTextureCoords[0][i].y;
+
+            vertex.tangent.x = mesh->mTangents[i].x;
+            vertex.tangent.y = mesh->mTangents[i].y;
+            vertex.tangent.z = mesh->mTangents[i].z;
+
+            vertex.bitangent.x = mesh->mBitangents[i].x;
+            vertex.bitangent.y = mesh->mBitangents[i].y;
+            vertex.bitangent.z = mesh->mBitangents[i].z;
         }
         else
         {
@@ -143,6 +151,13 @@ Mesh Model::process_mesh(aiMesh *mesh, const aiScene *scene)
 
         std::vector<Texture> specular_maps = load_material_texture(material, aiTextureType_SPECULAR, "texture_specular");
         textures.insert(textures.end(), specular_maps.begin(), specular_maps.end());
+    
+        std::vector<Texture> normal_maps = load_material_texture(material, aiTextureType_NORMALS, "texture_normal");
+        textures.insert(textures.end(), normal_maps.begin(), normal_maps.end());
+
+        std::vector<Texture> height_maps = load_material_texture(material, aiTextureType_AMBIENT, "texture_height");
+        textures.insert(textures.end(), height_maps.begin(), height_maps.end());
+
     }
 
     return Mesh(vertices, indices, textures);

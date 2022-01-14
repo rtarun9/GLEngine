@@ -51,11 +51,41 @@ int main()
 	GLFWwindow* window = create_window("GLEngine", SCREEN_WIDTH, SCREEN_HEIGHT);
 	UIManager ui_manager(window);
 
+	// Depth map for shadow mapping
+	uint32_t depth_fbo;
+	glGenFramebuffers(1, &depth_fbo);
+
+	constexpr int SHADOW_DEPTH_MAP_DIMENSION = 1024;
+	uint32_t depth_map;
+	glGenTextures(1, &depth_map);
+	glBindTexture(GL_TEXTURE_2D, depth_map);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_DEPTH_MAP_DIMENSION, SHADOW_DEPTH_MAP_DIMENSION, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, depth_fbo);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depth_map, 0);
+	glDrawBuffer(GL_NONE);
+	glReadBuffer(GL_NONE);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	float near_plane = 0.1f;
+	float far_plane = 1000.0f;
+	glm::mat4 light_projection_mat = glm::ortho(-100.0f, 100.0f, -100.0f, 100.0f, near_plane, far_plane);
+	glm::mat4 light_view_mat = glm::lookAt(glm::vec3(-2.0f, 100.0f, -1.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	glm::mat4 light_transform_mat = light_projection_mat * light_view_mat;
+
 	// Frame resources
 	Model sponza("../assets/models/sponza-gltf/sponza.gltf");
-	Shader shader("../shaders/test_vertex.glsl", "../shaders/depth_fragment.glsl");
-	Shader offscreen_fb_shader("../shaders/offscreen_vertex.glsl", "../shaders/offscreen_fragment.glsl");
+	Model cube("../assets/models/cube/Cube.gltf");
 	
+	Shader light_shader("../shaders/light_vertex.glsl", "../shaders/light_fragment.glsl");
+	Shader shader("../shaders/test_vertex.glsl", "../shaders/test_fragment.glsl");
+	Shader offscreen_fb_shader("../shaders/offscreen_vertex.glsl", "../shaders/offscreen_fragment.glsl");
+	Shader shadow_shader("../shaders/shadow_vertex.glsl", "../shaders/shadow_fragment.glsl");
+
 	OffscreenRT offscreen_rt{};
 
 	ImVec4 clear_color = ImVec4(0.1f, 0.6f, 0.8f, 1.0f);
@@ -64,6 +94,9 @@ int main()
 	model_mat = glm::scale(model_mat, glm::vec3(0.1f));
 	glm::mat4 view_mat = g_camera.get_view_mat();
 	glm::mat4 projection_mat = glm::perspective(glm::radians(45.0f), SCREEN_WIDTH / (float)SCREEN_HEIGHT, 0.1f, 1000.0f);
+
+	glm::vec3 light_position = glm::vec3(0.0f, 10.0f, 0.0f);
+	glm::vec3 light_color = glm::vec3(1.0f);
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -85,15 +118,34 @@ int main()
 		glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		ui_manager.render(clear_color, g_camera.m_movement_speed);
+		ui_manager.render(clear_color, g_camera.m_movement_speed, light_position, light_color);
 
 		// draw scene
+		
+		// draw light sources
 		view_mat = g_camera.get_view_mat();
 
+		light_shader.use();
+		model_mat = glm::mat4(1.0f);
+		model_mat = glm::translate(model_mat, light_position);
+		light_shader.set_mat4("model_mat", model_mat);
+		light_shader.set_mat4("view_mat", view_mat);
+		light_shader.set_mat4("projection_mat", projection_mat);
+		light_shader.set_vec3f("light_color", light_color);
+
+		cube.draw(light_shader);
+
+		// draw other models for scene
+		model_mat = glm::mat4(1.0f);
+
+		model_mat = glm::scale(model_mat, glm::vec3(0.1f));
 		shader.use();
 		shader.set_mat4("model_mat", model_mat);
 		shader.set_mat4("view_mat", view_mat);
 		shader.set_mat4("projection_mat", projection_mat);
+		shader.set_vec3f("light_pos", light_position);
+		shader.set_vec3f("camera_pos", g_camera.m_position);
+		shader.set_vec3f("light_color", light_color);
 
 		sponza.draw(shader);
 
