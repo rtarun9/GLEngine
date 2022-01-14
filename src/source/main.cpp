@@ -5,13 +5,10 @@
 
 #include <stb_image.h>
 
-#include <imgui.h>
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_opengl3.h>
-
 #include <iostream>
 #include <chrono>
 
+#include "../include/ui_manager.hpp"
 #include "../include/shader.hpp"
 #include "../include/camera.hpp"
 #include "../include/model.hpp"
@@ -31,91 +28,75 @@ static bool g_first_mouse = true;
 static bool g_use_mouse = true;
 Camera g_camera = Camera();
 
-
+GLFWwindow* create_window(const char *window_title, int width, int height);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void process_input(GLFWwindow* window);
 void process_mouse(GLFWwindow* window, double xpos, double ypos);
 void process_scroll(GLFWwindow* window, double xoffset, double yoffset);
 
+struct OffscreenRT
+{
+	OffscreenRT();
+
+	uint32_t fbo;
+	uint32_t color_attachment;
+	uint32_t depth_attachment;
+
+	uint32_t vao;
+	uint32_t vbo;
+};
+
 int main()
 {
-	// Initialize and configure GLFW
-	glfwInit();
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	GLFWwindow* window = create_window("GLEngine", SCREEN_WIDTH, SCREEN_HEIGHT);
+	UIManager ui_manager(window);
 
-	GLFWwindow* window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLEngine", nullptr, nullptr);
-	if (!window)
-	{
-		std::cout << "Failed to create GLFW window";
-		glfwTerminate();
-		return -1;
-	}
+	// Depth map for shadow mapping
+	uint32_t depth_fbo;
+	glGenFramebuffers(1, &depth_fbo);
 
-	glfwMakeContextCurrent(window);
-
-	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-	{
-		std::cout << "Failed to initialize GLAD";
-		return -1;
-	}
-
-	glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-	glfwSetCursorPosCallback(window, process_mouse);
-	glfwSetScrollCallback(window, process_scroll);
-
-	// Set up imgui
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO();
-	(void)io;
-
-	ImGui::StyleColorsDark();
-
-	ImGui_ImplGlfw_InitForOpenGL(window, true);
-	ImGui_ImplOpenGL3_Init("#version 330 core");
-	ImVec4 clear_color = ImVec4(0.1f, 0.6f, 0.8f, 1.0f);
-
-	// Setup frame resources
-	Shader shader("../shaders/test_vertex.glsl", "../shaders/test_fragment.glsl");
-	Shader depth_shader("../shaders/shadow_vertex.glsl", "../shaders/shadow_fragment.glsl");
-
-	Model sponza("../assets/models/sponza-gltf/Sponza.gltf");
-	Model cube("../assets/models/cube/cube.obj");
-
-	glm::vec3 light_color = glm::vec3(1.0f, 0.9f, 0.9f);
-	glm::vec3 directional_light_dir = glm::vec3(-5.0f, -10.1f, -2.0f);
-	glm::vec3 cube_position = glm::vec3(0.0f, 10.0f, 0.0f);
-
-	// Setup up resources for shadow mapping
-	uint32_t depth_map_fbo;
-	glGenFramebuffers(1, &depth_map_fbo);
-
-	uint32_t depth_map_dimension = 2048;
-
+	constexpr int SHADOW_DEPTH_MAP_DIMENSION = 1024;
 	uint32_t depth_map;
 	glGenTextures(1, &depth_map);
 	glBindTexture(GL_TEXTURE_2D, depth_map);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, depth_map_dimension, depth_map_dimension, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_DEPTH_MAP_DIMENSION, SHADOW_DEPTH_MAP_DIMENSION, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-	float clamp_color[] = { 1.0f, 1.0f, 1.0f, 1.0f };
-	glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, clamp_color);
-	
-	// Attach depth map to framebuffer
-	glBindFramebuffer(GL_FRAMEBUFFER, depth_map_fbo);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, depth_fbo);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depth_map, 0);
 	glDrawBuffer(GL_NONE);
 	glReadBuffer(GL_NONE);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LEQUAL);
-	glEnable(GL_CULL_FACE);
+	float near_plane = 0.1f;
+	float far_plane = 1000.0f;
+	glm::mat4 light_projection_mat = glm::ortho(-100.0f, 100.0f, -100.0f, 100.0f, near_plane, far_plane);
+	glm::mat4 light_view_mat = glm::lookAt(glm::vec3(-2.0f, 100.0f, -1.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	glm::mat4 light_transform_mat = light_projection_mat * light_view_mat;
+
+	// Frame resources
+	Model sponza("../assets/models/sponza-gltf/sponza.gltf");
+	Model cube("../assets/models/cube/Cube.gltf");
+	
+	Shader light_shader("../shaders/light_vertex.glsl", "../shaders/light_fragment.glsl");
+	Shader shader("../shaders/test_vertex.glsl", "../shaders/test_fragment.glsl");
+	Shader offscreen_fb_shader("../shaders/offscreen_vertex.glsl", "../shaders/offscreen_fragment.glsl");
+	Shader shadow_shader("../shaders/shadow_vertex.glsl", "../shaders/shadow_fragment.glsl");
+
+	OffscreenRT offscreen_rt{};
+
+	ImVec4 clear_color = ImVec4(0.1f, 0.6f, 0.8f, 1.0f);
+
+	glm::mat4 model_mat = glm::mat4(1.0f);
+	model_mat = glm::scale(model_mat, glm::vec3(0.1f));
+	glm::mat4 view_mat = g_camera.get_view_mat();
+	glm::mat4 projection_mat = glm::perspective(glm::radians(45.0f), SCREEN_WIDTH / (float)SCREEN_HEIGHT, 0.1f, 1000.0f);
+
+	glm::vec3 light_position = glm::vec3(0.0f, 10.0f, 0.0f);
+	glm::vec3 light_color = glm::vec3(1.0f);
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -125,123 +106,102 @@ int main()
 
 		glfwPollEvents();
 		process_input(window);
-
-		// draw ImGui stuff
-		{
-			ImGui_ImplOpenGL3_NewFrame();
-			ImGui_ImplGlfw_NewFrame();
-			ImGui::NewFrame();
-
-			ImGui::Begin("Scene settings");
-			ImGui::ColorEdit3("clear_color", (float*)&clear_color);
-			ImGui::SliderFloat3("directional_light_pos", &directional_light_dir[0], -10.0f, 10.0f, "%f", 1.0f);
-			ImGui::SliderFloat3("light_color", &light_color[0], 0.0f, 1.0f, "%f", 1.0f);
-			ImGui::SliderFloat3("cube_position", &cube_position[0], -50.0f, 50.0f, "%f", 1.0f);
-
-			ImGui::End();
-			ImGui::Render();
-
-		}
-
-		// draw to depth map
-		glBindFramebuffer(GL_FRAMEBUFFER, depth_map_fbo);
-		glClear(GL_DEPTH_BUFFER_BIT);
-
-			
-		glm::mat4 light_space_matrix = glm::mat4(1.0f);
 		
-		// drawing
-		{
-			glViewport(0, 0, depth_map_dimension, depth_map_dimension);
+		glBindFramebuffer(GL_FRAMEBUFFER, offscreen_rt.fbo);
 
-			float near_plane = 0.1f;
-			float far_plane = 10000.0f;
-			glm::mat4 light_projection_mat = glm::ortho(-500.0f, 500.0f, -500.0f, 500.0f, near_plane, far_plane);
-
-			glm::mat4 light_view_mat = glm::lookAt( 100.0f * directional_light_dir, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-
-
-			glm::mat4 model_mat = glm::mat4(1.0f);
-			model_mat = glm::scale(model_mat, glm::vec3(0.5f));
-			light_space_matrix = light_projection_mat * light_view_mat;
-
-			depth_shader.use();
-
-			depth_shader.set_mat4("model_mat", model_mat);
-			depth_shader.set_mat4("light_space_matrix", light_space_matrix);
-
-			sponza.draw(depth_shader);
-			
-			model_mat = glm::mat4(1.0f);
-			model_mat = glm::scale(model_mat, glm::vec3(10.0f));
-			model_mat = glm::translate(model_mat, cube_position);
-
-			cube.draw(depth_shader);
-		}
-
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		
-		
-		// Draw to rendertarget
-		glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LESS);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glEnable(GL_CULL_FACE);
+		glCullFace(GL_BACK);
 		glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		// drawing
-		{
-			glm::mat4 projection_mat = glm::perspective(glm::radians(g_camera.get_zoom()), (float)SCREEN_WIDTH / SCREEN_HEIGHT, 0.1f, 10000.0f);
-			glm::mat4 view_mat = g_camera.get_view_mat();
-			
-			glm::mat4 model_mat = glm::mat4(1.0f);
-			model_mat = glm::scale(model_mat, glm::vec3(0.5f));
 
-			shader.use();
-			shader.set_vec3f("camera_position", g_camera.m_position);
-			shader.set_vec3f("light_color", light_color);
-			shader.set_vec3f("directional_light_dir", directional_light_dir);
-			shader.set_mat4("light_space_matrix", light_space_matrix);
-			shader.set_int("depth_map", depth_map);
-			
-			shader.set_mat4("model_mat", model_mat);
-			shader.set_mat4("view_mat", view_mat);
-			shader.set_mat4("projection_mat", projection_mat);
+		ui_manager.render(clear_color, g_camera.m_movement_speed, light_position, light_color);
 
-			sponza.draw(shader);
-		}
-
-		// drawing
-		{
-			glm::mat4 projection_mat = glm::perspective(glm::radians(g_camera.get_zoom()), (float)SCREEN_WIDTH / SCREEN_HEIGHT, 0.1f, 10000.0f);
-			glm::mat4 view_mat = g_camera.get_view_mat();
-
-			glm::mat4 model_mat = glm::mat4(1.0f);
-			model_mat = glm::scale(model_mat, glm::vec3(10.0f));
-			model_mat = glm::translate(model_mat, cube_position);
-
-			shader.use();
-			shader.set_vec3f("camera_position", g_camera.m_position);
-			shader.set_vec3f("light_color", light_color);
-			shader.set_vec3f("directional_light_dir", directional_light_dir);
-			shader.set_mat4("light_space_matrix", light_space_matrix);
-			shader.set_int("depth_map", depth_map);
-
-
-			
-			shader.set_mat4("model_mat", model_mat);
-			shader.set_mat4("view_mat", view_mat);
-			shader.set_mat4("projection_mat", projection_mat);
-
-			cube.draw(shader);
-		}
+		// draw scene
 		
-		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+		// draw light sources
+		view_mat = g_camera.get_view_mat();
+
+		light_shader.use();
+		model_mat = glm::mat4(1.0f);
+		model_mat = glm::translate(model_mat, light_position);
+		light_shader.set_mat4("model_mat", model_mat);
+		light_shader.set_mat4("view_mat", view_mat);
+		light_shader.set_mat4("projection_mat", projection_mat);
+		light_shader.set_vec3f("light_color", light_color);
+
+		cube.draw(light_shader);
+
+		// draw other models for scene
+		model_mat = glm::mat4(1.0f);
+
+		model_mat = glm::scale(model_mat, glm::vec3(0.1f));
+		shader.use();
+		shader.set_mat4("model_mat", model_mat);
+		shader.set_mat4("view_mat", view_mat);
+		shader.set_mat4("projection_mat", projection_mat);
+		shader.set_vec3f("light_pos", light_position);
+		shader.set_vec3f("camera_pos", g_camera.m_position);
+		shader.set_vec3f("light_color", light_color);
+
+		sponza.draw(shader);
+
+		// render to default FBO
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		glDisable(GL_DEPTH_TEST);
+		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		offscreen_fb_shader.use();
+		glBindTexture(GL_TEXTURE_2D, offscreen_rt.color_attachment);
+
+		glBindVertexArray(offscreen_rt.vao);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+
+		ui_manager.present();
 
 		glfwSwapBuffers(window);
-
 	}
 
 	glfwTerminate();
 	return 0;
+}
+
+GLFWwindow* create_window(const char* window_title, int width, int height)
+{
+	// Initialize and configure GLFW
+	glfwInit();
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+	GLFWwindow* window = glfwCreateWindow(width, height, window_title, nullptr, nullptr);
+	if (!window)
+	{
+		std::cout << "Failed to create GLFW window";
+		glfwTerminate();
+		exit(-1);
+	}
+
+	glfwMakeContextCurrent(window);
+
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+	{
+		std::cout << "Failed to initialize GLAD";
+		exit(-1);
+	}
+
+	glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+	glfwSetCursorPosCallback(window, process_mouse);
+	glfwSetScrollCallback(window, process_scroll);
+
+	return window;
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -312,4 +272,67 @@ void process_mouse(GLFWwindow* window, double xpos, double ypos)
 void process_scroll(GLFWwindow* window, double xoffset, double yoffset)
 {
 	g_camera.process_scroll(yoffset);
+}
+
+OffscreenRT::OffscreenRT()
+	: fbo(-1), color_attachment(-1), depth_attachment(-1)
+{
+	// set up offscreen vbo and vao
+	float fbo_vertices[] =
+	{
+	   -1.0f, 1.0f, 0.0f, 1.0f,
+	   -1.0f, -1.0f, 0.0f, 0.0f,
+		1.0f, -1.0f, 1.0f, 0.0f,
+
+	   -1.0f, 1.0f, 0.0f, 1.0f,
+		1.0f, -1.0f, 1.0f, 0.0f,
+		1.0f, 1.0f, 1.0f, 1.0f
+	};
+
+	glGenVertexArrays(1, &vao);
+	glBindVertexArray(vao);
+
+	glGenBuffers(1, &vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(fbo_vertices), fbo_vertices, GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4, nullptr);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4, (void*)(sizeof(float) * 2));
+	glEnableVertexAttribArray(1);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+
+	// framebuffer
+	glGenFramebuffers(1, &fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+	// color attachment
+	glGenTextures(1, &color_attachment);
+	glBindTexture(GL_TEXTURE_2D, color_attachment);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// attach color attachment to framebuffer
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color_attachment, 0);
+
+	// depth attachment
+	glGenTextures(1, &depth_attachment);
+	glBindTexture(GL_TEXTURE_2D, depth_attachment);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, 0);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// attach depth attachment to framebuffer
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, depth_attachment, 0);
+
+	// check if framebuffer is complete
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+	{
+		std::cout << "Framebuffer is not complete : " << glCheckFramebufferStatus(GL_FRAMEBUFFER) << "\n";
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
 }
