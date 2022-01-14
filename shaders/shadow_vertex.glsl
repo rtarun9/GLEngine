@@ -9,5 +9,5 @@ uniform mat4 light_space_matrix;
 
 void main()
 {
-	gl_Position = light_space_matrix * vec4(in_pos, 1.0f);
+	gl_Position = light_space_matrix * model_mat * vec4(in_pos, 1.0f);
 }
