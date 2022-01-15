@@ -42,16 +42,18 @@ void Mesh::draw(Shader& shader)
             number = std::to_string(height_num++);
         }
 
-        shader.set_float(("material." + texture_type + number).c_str(), i);
+        shader.set_int(("material." + texture_type + number).c_str(), i);
+
         glBindTexture(GL_TEXTURE_2D, m_textures[i].texture_id);
     }
 
 
     glBindVertexArray(m_vao);
-    glDrawElements(GL_TRIANGLES, m_indices.size(), GL_UNSIGNED_INT, 0);
+    glDrawElements(GL_TRIANGLES, static_cast<uint32_t>(m_indices.size()), GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
 
     glActiveTexture(GL_TEXTURE0);
+
 }
 
 void Mesh::setup_mesh()

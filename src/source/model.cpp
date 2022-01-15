@@ -1,12 +1,14 @@
 #include "../include/model.hpp"
 
 #include <stb_image.h>
+#include <glad/glad.h>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
 #include <iostream>
+#include <GL/glext.h>
 
 unsigned int texture_from_file(const char *path, const std::string &directory, bool gamma = true)
 {
@@ -21,14 +23,44 @@ unsigned int texture_from_file(const char *path, const std::string &directory, b
     if (data)
     {
         GLenum format;
-        if (num_components == 1)
-            format = GL_RED;
-        else if (num_components == 3)
-            format = GL_RGB;
-        else if (num_components == 4)
-            format = GL_RGBA;
-
+        if (!gamma)
+        {
+            if (num_components == 1)
+            {
+                format = GL_RED;
+            }
+            else if (num_components == 3)
+            {
+                format = GL_RGB;
+            }
+            else if (num_components == 4)
+            {
+                format = GL_RGBA;
+            }
+        }
+        else
+        {
+            if (num_components == 1)
+            {
+                format = GL_RED;
+            }
+            else if (num_components == 3)
+            {
+                format = GL_SRGB;
+            }
+            else if (num_components == 4)
+            {
+                format = GL_SRGB_ALPHA;
+            }
+        }
+      
         glBindTexture(GL_TEXTURE_2D, texture_id);
+
+        float aniso = 0.0f;
+        
+        glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &aniso);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, aniso);
+
         glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
         glGenerateMipmap(GL_TEXTURE_2D);
 
@@ -64,7 +96,7 @@ void Model::draw(Shader& shader)
 void Model::load_model(const std::string& path)
 {
     Assimp::Importer importer;
-    const aiScene *scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_OptimizeMeshes | aiProcess_CalcTangentSpace);
+    const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace | aiProcess_OptimizeMeshes);
 
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
     {
@@ -129,6 +161,14 @@ Mesh Model::process_mesh(aiMesh *mesh, const aiScene *scene)
         {
             vertex.tex_coords.x = 0;
             vertex.tex_coords.y = 0;
+
+            vertex.tangent.x = 0;
+            vertex.tangent.y = 0;
+            vertex.tangent.z = 0;
+
+            vertex.bitangent.x = 0;
+            vertex.bitangent.y = 0;
+            vertex.bitangent.z = 0;
         }
 
         vertices.push_back(vertex);
@@ -155,7 +195,7 @@ Mesh Model::process_mesh(aiMesh *mesh, const aiScene *scene)
         std::vector<Texture> normal_maps = load_material_texture(material, aiTextureType_NORMALS, "texture_normal");
         textures.insert(textures.end(), normal_maps.begin(), normal_maps.end());
 
-        std::vector<Texture> height_maps = load_material_texture(material, aiTextureType_AMBIENT, "texture_height");
+        std::vector<Texture> height_maps = load_material_texture(material, aiTextureType_HEIGHT, "texture_height");
         textures.insert(textures.end(), height_maps.begin(), height_maps.end());
 
     }
@@ -189,7 +229,15 @@ std::vector<Texture> Model::load_material_texture(aiMaterial *material, aiTextur
         }
         
         Texture texture;
-        texture.texture_id = texture_from_file(str.C_Str(), m_directory);
+        if (type_name == "texture_normal" || type_name == "texture_height")
+        {
+            texture.texture_id = texture_from_file(str.C_Str(), m_directory, false);
+        }
+        else
+        {
+            texture.texture_id = texture_from_file(str.C_Str(), m_directory, false);
+        }
+
         texture.type = type_name;
         texture.path = str.C_Str();
         textures.push_back(texture);

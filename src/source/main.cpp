@@ -98,10 +98,11 @@ int main()
 	glm::vec3 light_position = glm::vec3(0.0f, 10.0f, 0.0f);
 	glm::vec3 light_color = glm::vec3(1.0f);
 
+
 	while (!glfwWindowShouldClose(window))
 	{
 		g_current_frame_time = g_clock.now();
-		g_delta_time = (g_current_frame_time - g_previous_frame_time).count() * 1e-9;
+		g_delta_time = static_cast<float>((g_current_frame_time - g_previous_frame_time).count() * 1e-9);
 		g_previous_frame_time = g_current_frame_time;
 
 		glfwPollEvents();
@@ -146,7 +147,6 @@ int main()
 		shader.set_vec3f("light_pos", light_position);
 		shader.set_vec3f("camera_pos", g_camera.m_position);
 		shader.set_vec3f("light_color", light_color);
-
 		sponza.draw(shader);
 
 		// render to default FBO
@@ -251,17 +251,17 @@ void process_mouse(GLFWwindow* window, double xpos, double ypos)
 {
 	if (g_first_mouse)
 	{
-		g_last_x = xpos;
-		g_last_y = ypos;
+		g_last_x = static_cast<float>(xpos);
+		g_last_y = static_cast<float>(ypos);
 
 		g_first_mouse = false;
 	}
 
-	float xoffset = xpos - g_last_x;
-	float yoffset = g_last_y - ypos;
+	float xoffset = static_cast<float>(xpos - g_last_x);
+	float yoffset = static_cast<float>(g_last_y - ypos);
 
-	g_last_x = xpos;
-	g_last_y = ypos;
+	g_last_x = static_cast<float>(xpos);
+	g_last_y = static_cast<float>(ypos);
 
 	if (g_use_mouse)
 	{
@@ -271,7 +271,7 @@ void process_mouse(GLFWwindow* window, double xpos, double ypos)
 
 void process_scroll(GLFWwindow* window, double xoffset, double yoffset)
 {
-	g_camera.process_scroll(yoffset);
+	g_camera.process_scroll(static_cast<float>(yoffset));
 }
 
 OffscreenRT::OffscreenRT()

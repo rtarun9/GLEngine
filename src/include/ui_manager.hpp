@@ -24,8 +24,8 @@ public:
 		ImGui::Begin("Scene Control");
 		ImGui::ColorEdit3("clear_color", (float*)&clear_color);
 		ImGui::SliderFloat("camera_speed", &camera_speed, 0.0f, 1000.0f);
-		ImGui::SliderFloat3("light_position", &light_position[0], -45.0f, 45.0f, "%.1f");
-		ImGui::SliderFloat3("light_color", &light_color[0], 0.0f, 1.0f, "%.01f");
+		ImGui::SliderFloat3("light_position", &light_position[0], -100.0f, 100.0f, "%.1f");
+		ImGui::SliderFloat3("light_color", &light_color[0], 0.0f, 1.0f, "%.1f");
 		ImGui::End();
 		ImGui::Render();
 	}
