@@ -20,6 +20,8 @@ unsigned int texture_from_file(const char *path, const std::string &directory, b
 
     int width, height, num_components;
     unsigned char *data = stbi_load(filename.c_str(), &width, &height, &num_components, 0);
+    GLenum data_format;
+
     if (data)
     {
         GLenum format;
@@ -42,14 +44,17 @@ unsigned int texture_from_file(const char *path, const std::string &directory, b
         {
             if (num_components == 1)
             {
+                data_format = GL_RED;
                 format = GL_RED;
             }
             else if (num_components == 3)
             {
+                data_format = GL_RGB;
                 format = GL_SRGB;
             }
             else if (num_components == 4)
             {
+                data_format = GL_RGBA;
                 format = GL_SRGB_ALPHA;
             }
         }
@@ -61,7 +66,7 @@ unsigned int texture_from_file(const char *path, const std::string &directory, b
         glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &aniso);
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, aniso);
 
-        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, data_format, GL_UNSIGNED_BYTE, data);
         glGenerateMipmap(GL_TEXTURE_2D);
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -192,10 +197,10 @@ Mesh Model::process_mesh(aiMesh *mesh, const aiScene *scene)
         std::vector<Texture> specular_maps = load_material_texture(material, aiTextureType_SPECULAR, "texture_specular");
         textures.insert(textures.end(), specular_maps.begin(), specular_maps.end());
     
-        std::vector<Texture> normal_maps = load_material_texture(material, aiTextureType_NORMALS, "texture_normal");
+        std::vector<Texture> normal_maps = load_material_texture(material, aiTextureType_HEIGHT, "texture_normal");
         textures.insert(textures.end(), normal_maps.begin(), normal_maps.end());
 
-        std::vector<Texture> height_maps = load_material_texture(material, aiTextureType_HEIGHT, "texture_height");
+        std::vector<Texture> height_maps = load_material_texture(material, aiTextureType_DISPLACEMENT, "texture_height");
         textures.insert(textures.end(), height_maps.begin(), height_maps.end());
 
     }
@@ -235,7 +240,7 @@ std::vector<Texture> Model::load_material_texture(aiMaterial *material, aiTextur
         }
         else
         {
-            texture.texture_id = texture_from_file(str.C_Str(), m_directory, false);
+            texture.texture_id = texture_from_file(str.C_Str(), m_directory, true);
         }
 
         texture.type = type_name;
