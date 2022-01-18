@@ -20,7 +20,7 @@ unsigned int texture_from_file(const char *path, const std::string &directory, b
 
     int width, height, num_components;
     unsigned char *data = stbi_load(filename.c_str(), &width, &height, &num_components, 0);
-    GLenum data_format;
+    GLenum data_format = GL_RGB;
 
     if (data)
     {
@@ -30,14 +30,17 @@ unsigned int texture_from_file(const char *path, const std::string &directory, b
             if (num_components == 1)
             {
                 format = GL_RED;
+                data_format = GL_RED;
             }
             else if (num_components == 3)
             {
                 format = GL_RGB;
+                data_format = GL_RGB;
             }
             else if (num_components == 4)
             {
                 format = GL_RGBA;
+                data_format = GL_RGBA;
             }
         }
         else
@@ -197,7 +200,7 @@ Mesh Model::process_mesh(aiMesh *mesh, const aiScene *scene)
         std::vector<Texture> specular_maps = load_material_texture(material, aiTextureType_SPECULAR, "texture_specular");
         textures.insert(textures.end(), specular_maps.begin(), specular_maps.end());
     
-        std::vector<Texture> normal_maps = load_material_texture(material, aiTextureType_HEIGHT, "texture_normal");
+        std::vector<Texture> normal_maps = load_material_texture(material, aiTextureType_NORMALS, "texture_normal");
         textures.insert(textures.end(), normal_maps.begin(), normal_maps.end());
 
         std::vector<Texture> height_maps = load_material_texture(material, aiTextureType_DISPLACEMENT, "texture_height");
@@ -208,7 +211,7 @@ Mesh Model::process_mesh(aiMesh *mesh, const aiScene *scene)
     return Mesh(vertices, indices, textures);
 }
 
-std::vector<Texture> Model::load_material_texture(aiMaterial *material, aiTextureType type, std::string type_name)
+std::vector<Texture> Model::load_material_texture(aiMaterial *material, aiTextureType type, const std::string& type_name)
 {
     std::vector<Texture> textures;
 

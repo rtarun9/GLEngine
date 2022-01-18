@@ -17,7 +17,7 @@ public:
 
     // Translate aiMesh into a Mesh object
     Mesh process_mesh(aiMesh *mesh, const aiScene *scene);
-    std::vector<Texture> load_material_texture(aiMaterial *material, aiTextureType type, std::string type_name);
+    std::vector<Texture> load_material_texture(aiMaterial *material, aiTextureType type, const std::string& type_name);
 
 private:
     std::vector<Mesh> m_meshes;
