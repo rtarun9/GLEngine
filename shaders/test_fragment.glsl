@@ -3,7 +3,8 @@
 #define near 0.1f
 #define far 100.0f
 
-out vec4 out_frag_color;
+layout (location = 0) out vec4 out_frag_color;
+layout (location = 1) out vec4 out_bright_color;
 
 in vec2 tex_coord;
 in vec3 frag_position_tbn;
@@ -23,6 +24,8 @@ uniform Material material;
 
 uniform float height_scale;
 uniform vec3 light_color;
+
+uniform float light_intensity;
 
 vec2 parallax_mapping(vec2 tex_coords, vec3 view_dir)
 {
@@ -118,6 +121,24 @@ void main()
 	float dist = length(light_pos_tbn - frag_position_tbn);
 	float attenuation = 1.0f / (0.05f + dist * 0.009f + dist * dist * 0.0032f);
 	vec3 result = calc_ambient(diff_texture) + (calc_specular(specular_texture, norm, half_way_dir) + calc_diffuse(diff_texture, norm, light_dir));
+	// transform to grayscale
+	if (light_intensity > 1.0f)
+	{
+		attenuation = 1.0f;
+	}
 
-	out_frag_color = vec4(result * light_color * attenuation, 1.0f);
+	out_frag_color = vec4(result * light_color * attenuation * light_intensity, 1.0f);
+	
+	float brightness = dot(out_frag_color.xyz, vec3(0.2126, 0.7152, 0.0722));
+
+
+	if (brightness > 0.5f)
+	{
+		out_bright_color = vec4(out_frag_color.xyz * light_intensity, 1.0f);
+	}
+	else
+	{
+		out_bright_color = vec4(0.0f, 0.0f, 0.0f, 1.0f);
+	}
+
 }

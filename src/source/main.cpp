@@ -39,7 +39,7 @@ struct OffscreenRT
 	OffscreenRT();
 
 	uint32_t fbo;
-	uint32_t color_attachment;
+	uint32_t color_attachments[2];
 	uint32_t depth_attachment;
 
 	uint32_t vao;
@@ -59,12 +59,16 @@ int main()
 
 	// Frame resources
 	GameObject sponza;
-	sponza.model = std::make_unique<Model>("../assets/models/sponza/sponza.obj");
+	sponza.model = std::make_unique<Model>("../assets/models/sponza/glTF/Sponza.gltf");
 	sponza.transform_mat = glm::mat4(1.0f);
 
 	GameObject light_source;
 	light_source.model = std::make_unique<Model>("../assets/models/cube/Cube.gltf");
 	light_source.transform_mat = glm::mat4(1.0f);
+
+	GameObject nano_suit;
+	nano_suit.model = std::make_unique<Model>("../assets/models/nanosuit/scene.gltf");
+	nano_suit.transform_mat = glm::mat4(1.0f);
 
 	Shader light_shader("../shaders/light_vertex.glsl", "../shaders/light_fragment.glsl");
 	Shader shader("../shaders/test_vertex.glsl", "../shaders/test_fragment.glsl");
@@ -82,6 +86,8 @@ int main()
 	ImVec4 clear_color = ImVec4(0.1f, 0.6f, 0.8f, 1.0f);
 
 	float exposure = 1.0f;
+	float bloom_intensity = 0.0f;
+	float light_intensity = 1.0f;
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -116,6 +122,8 @@ int main()
 			ImGui::SliderFloat3("light_color", &light_color[0], 0.0f, 5.0f, "%.1f");
 			ImGui::SliderFloat("height_scale", &height_scale, 0.0f, 1.0f, ".%1f");
 			ImGui::SliderFloat("exposure", &exposure, 0.0f, 10.0f, ".%1f");
+			ImGui::SliderFloat("bloom_intensity", &bloom_intensity, 0.0f, 1.0f, ".%1f");
+			ImGui::SliderFloat("light_intensity", &light_intensity, 0.0f, 100.0f, ".%1f");
 			ImGui::End();
 			ImGui::Render();
 		}
@@ -127,13 +135,16 @@ int main()
 		
 		// draw light sources
 		{
-			light_shader.use();
 			light_source.transform_mat = glm::mat4(1.0f);
 			light_source.transform_mat = glm::translate(light_source.transform_mat, light_position);
+			light_source.transform_mat = glm::scale(light_source.transform_mat, glm::vec3(1.0f));
+
+			light_shader.use();
 			light_shader.set_mat4("model_mat", light_source.transform_mat);
 			light_shader.set_mat4("view_mat", view_mat);
 			light_shader.set_mat4("projection_mat", projection_mat);
 			light_shader.set_vec3f("light_color", light_color);
+			light_shader.set_float("light_intensity", light_intensity);
 
 			light_source.model->draw(light_shader);
 		}
@@ -151,6 +162,8 @@ int main()
 			shader.set_vec3f("camera_pos", g_camera.m_position);
 			shader.set_vec3f("light_color", light_color);
 			shader.set_float("height_scale", height_scale);
+			shader.set_float("light_intensity", 1.0f);
+
 			sponza.model->draw(shader);
 		}
 		
@@ -164,8 +177,16 @@ int main()
 
 		offscreen_fb_shader.use();
 		offscreen_fb_shader.set_float("exposure", exposure);
-		glBindTexture(GL_TEXTURE_2D, offscreen_rt.color_attachment);
+		offscreen_fb_shader.set_float("bloom_intensity", bloom_intensity);
 
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, offscreen_rt.color_attachments[0]);
+		offscreen_fb_shader.set_int("offscreen_texture_sampler", 0);
+
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, offscreen_rt.color_attachments[1]);
+		offscreen_fb_shader.set_int("bloom_texture_sampler", 1);
+	
 		glBindVertexArray(offscreen_rt.vao);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -281,7 +302,7 @@ void process_scroll(GLFWwindow* window, double xoffset, double yoffset)
 }
 
 OffscreenRT::OffscreenRT()
-	: fbo(-1), color_attachment(-1), depth_attachment(-1)
+	: fbo(-1),  depth_attachment(-1)
 {
 	// set up offscreen vbo and vao
 	float fbo_vertices[] =
@@ -314,14 +335,27 @@ OffscreenRT::OffscreenRT()
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
 	// color attachment
-	glGenTextures(1, &color_attachment);
-	glBindTexture(GL_TEXTURE_2D, color_attachment);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glGenTextures(2, color_attachments);
+	for (int i = 0; i < 2; i++)
+	{
+		glBindTexture(GL_TEXTURE_2D, color_attachments[i]);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	// attach color attachment to framebuffer
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color_attachment, 0);
+		// attach color attachment to framebuffer
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, color_attachments[i], 0);
+	}
+
+	uint32_t attachments[2] =
+	{
+		GL_COLOR_ATTACHMENT0,
+		GL_COLOR_ATTACHMENT1
+	};
+
+	glDrawBuffers(2, attachments);
 
 	// depth attachment
 	glGenTextures(1, &depth_attachment);

@@ -203,7 +203,7 @@ Mesh Model::process_mesh(aiMesh *mesh, const aiScene *scene)
         std::vector<Texture> normal_maps = load_material_texture(material, aiTextureType_NORMALS, "texture_normal");
         textures.insert(textures.end(), normal_maps.begin(), normal_maps.end());
 
-        std::vector<Texture> height_maps = load_material_texture(material, aiTextureType_DISPLACEMENT, "texture_height");
+        std::vector<Texture> height_maps = load_material_texture(material, aiTextureType_HEIGHT, "texture_height");
         textures.insert(textures.end(), height_maps.begin(), height_maps.end());
 
     }
