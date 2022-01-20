@@ -9,10 +9,10 @@ Graphics renderer for quickly testing out various graphics techniques.
 * Normal mapping.
 * Parallax mapping.
 * HDR.
+* Bloom (With Gaussian blur).
 
 # Future plans
 
-* Bloom.
 * PBR.
 * Shadow mapping.
 * Volumetric lighting.

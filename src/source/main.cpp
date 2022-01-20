@@ -57,6 +57,33 @@ int main()
 	GLFWwindow* window = create_window("GLEngine", SCREEN_WIDTH, SCREEN_HEIGHT);
 	UIManager ui_manager(window);
 
+	// Frame buffers for applying gaussian blur on bloom image (horizontal and vertical)
+	uint32_t bloom_fbo[2];
+	uint32_t bloom_buffer[2];
+
+	glGenFramebuffers(2, bloom_fbo);
+	glGenTextures(2, bloom_buffer);
+
+	for (int i = 0; i < 2; i++)
+	{
+		glBindFramebuffer(GL_FRAMEBUFFER, bloom_fbo[i]);
+		glBindTexture(GL_TEXTURE_2D, bloom_buffer[i]);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bloom_buffer[i], 0);
+	
+		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		{
+			std::cout << "Bloom framebuffer not complete!";
+		}
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	// Frame resources
 	GameObject sponza;
 	sponza.model = std::make_unique<Model>("../assets/models/sponza/glTF/Sponza.gltf");
@@ -66,13 +93,14 @@ int main()
 	light_source.model = std::make_unique<Model>("../assets/models/cube/Cube.gltf");
 	light_source.transform_mat = glm::mat4(1.0f);
 
-	GameObject nano_suit;
-	nano_suit.model = std::make_unique<Model>("../assets/models/nanosuit/scene.gltf");
-	nano_suit.transform_mat = glm::mat4(1.0f);
+	GameObject cube;
+	cube.model = std::make_unique<Model>("../assets/models/cube/Cube.gltf");
+	cube.transform_mat = glm::mat4(1.0f);
 
 	Shader light_shader("../shaders/light_vertex.glsl", "../shaders/light_fragment.glsl");
 	Shader shader("../shaders/test_vertex.glsl", "../shaders/test_fragment.glsl");
 	Shader offscreen_fb_shader("../shaders/offscreen_vertex.glsl", "../shaders/offscreen_fragment.glsl");
+	Shader blur_shader("../shaders/offscreen_vertex.glsl", "../shaders/gaussian_blur_fragment.glsl");
 
 	OffscreenRT offscreen_rt{};
 
@@ -85,9 +113,19 @@ int main()
 
 	ImVec4 clear_color = ImVec4(0.1f, 0.6f, 0.8f, 1.0f);
 
+	glm::vec3 cube_position = glm::vec3(0.0f, 10.0f, 1.0f);
+	glm::vec3 cube_scale = glm::vec3(1.0f);
+	glm::vec3 cube_color = glm::vec3(1.0f);
+
 	float exposure = 1.0f;
 	float bloom_intensity = 0.0f;
 	float light_intensity = 1.0f;
+
+	bool horizontal = true;
+	bool first_iteration = true;
+	int amount = 100;
+	float spread = 0.0f;
+
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -118,13 +156,25 @@ int main()
 			ImGui::Begin("Scene Control");
 			ImGui::ColorEdit3("clear_color", (float*)&clear_color);
 			ImGui::SliderFloat("camera_speed", &g_camera.m_movement_speed, 0.0f, 1000.0f);
-			ImGui::SliderFloat3("light_position", &light_position[0], -100.0f, 100.0f, "%.1f");
-			ImGui::SliderFloat3("light_color", &light_color[0], 0.0f, 5.0f, "%.1f");
-			ImGui::SliderFloat("height_scale", &height_scale, 0.0f, 1.0f, ".%1f");
-			ImGui::SliderFloat("exposure", &exposure, 0.0f, 10.0f, ".%1f");
-			ImGui::SliderFloat("bloom_intensity", &bloom_intensity, 0.0f, 1.0f, ".%1f");
-			ImGui::SliderFloat("light_intensity", &light_intensity, 0.0f, 100.0f, ".%1f");
+			ImGui::SliderFloat("height_scale", &height_scale, 0.0f, 1.0f);
 			ImGui::End();
+
+			
+			ImGui::Begin("Light Settings");
+			ImGui::SliderFloat3("light_position", &light_position[0], -150.0f, 150.0f);
+			ImGui::SliderFloat3("light_color", &light_color[0], 0.0f, 5.0f);
+			ImGui::SliderFloat("light_intensity", &light_intensity, 0.0f, 100.0f);
+			ImGui::SliderFloat("bloom_intensity", &bloom_intensity, 0.0f, 100.0f);
+			ImGui::SliderFloat("exposure", &exposure, 0.0f, 10.0f);
+			ImGui::SliderFloat("spread", &spread, 0.0f, 10.0f);
+			ImGui::End();
+
+			ImGui::Begin("Game Objects");
+			ImGui::SliderFloat3("cube_position", &cube_position[0], -100.0f, 100.0f);
+			ImGui::SliderFloat3("cube_scale", &cube_scale[0], 1.0f, 10.0f);
+			ImGui::SliderFloat3("cube_color", &cube_color[0], 0.0f, 5.0f);
+			ImGui::End();
+
 			ImGui::Render();
 		}
 	
@@ -153,7 +203,7 @@ int main()
 		{
 			sponza.transform_mat = glm::mat4(1.0f);
 
-			sponza.transform_mat = glm::scale(sponza.transform_mat, glm::vec3(0.1f));
+			sponza.transform_mat = glm::scale(sponza.transform_mat, glm::vec3(0.05f));
 			shader.use();
 			shader.set_mat4("model_mat", sponza.transform_mat);
 			shader.set_mat4("view_mat", view_mat);
@@ -162,11 +212,43 @@ int main()
 			shader.set_vec3f("camera_pos", g_camera.m_position);
 			shader.set_vec3f("light_color", light_color);
 			shader.set_float("height_scale", height_scale);
-			shader.set_float("light_intensity", 1.0f);
+			shader.set_float("light_intensity", light_intensity);
 
 			sponza.model->draw(shader);
+
+			light_shader.use();
+			cube.transform_mat = glm::mat4(1.0f);
+			cube.transform_mat = glm::translate(cube.transform_mat, cube_position);
+			cube.transform_mat = glm::rotate(cube.transform_mat, glm::radians(90.0f), glm::vec3(0.0f, 1.f, 0.0f));
+			cube.transform_mat = glm::scale(cube.transform_mat, cube_scale);
+			light_shader.set_mat4("model_mat", cube.transform_mat);
+			light_shader.set_vec3f("light_color", cube_color);
+			light_shader.set_float("light_intensity", light_intensity);
+			cube.model->draw(light_shader);
 		}
 		
+		// apply gaussian blur
+		horizontal = true;
+		first_iteration = true;
+		blur_shader.use();
+		for (int i = 0; i < amount; i++)
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, bloom_fbo[horizontal]);
+			blur_shader.set_bool("horizontal", horizontal);
+			blur_shader.set_float("spread", spread);
+			glBindTexture(GL_TEXTURE_2D, first_iteration ? offscreen_rt.color_attachments[1] : bloom_buffer[!horizontal]);
+
+			glBindVertexArray(offscreen_rt.vao);
+			glDrawArrays(GL_TRIANGLES, 0, 6);
+
+			horizontal = !horizontal;
+	
+			if (first_iteration)
+			{
+				first_iteration = false;
+			}
+		}
+
 		// render to default FBO
 
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -175,6 +257,7 @@ int main()
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
+		
 		offscreen_fb_shader.use();
 		offscreen_fb_shader.set_float("exposure", exposure);
 		offscreen_fb_shader.set_float("bloom_intensity", bloom_intensity);
@@ -184,7 +267,7 @@ int main()
 		offscreen_fb_shader.set_int("offscreen_texture_sampler", 0);
 
 		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, offscreen_rt.color_attachments[1]);
+		glBindTexture(GL_TEXTURE_2D, bloom_buffer[!horizontal]);
 		offscreen_fb_shader.set_int("bloom_texture_sampler", 1);
 	
 		glBindVertexArray(offscreen_rt.vao);
@@ -215,8 +298,9 @@ GLFWwindow* create_window(const char* window_title, int width, int height)
 		exit(-1);
 	}
 
-	glfwMakeContextCurrent(window);
 
+	glfwMakeContextCurrent(window);
+	glfwSwapInterval(1);
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
 		std::cout << "Failed to initialize GLAD";
